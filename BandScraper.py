@@ -3,6 +3,8 @@ import bs4 as bs
 import urllib.parse
 import urllib.request
 
+import re
+
 html_doc = """
 <html><head><title>The Dormouse's story</title></head>
 <body>
@@ -26,13 +28,22 @@ try:
     req = urllib.request.Request(url, headers=headers)
     source = urllib.request.urlopen(req)
 
-    soup = bs.BeautifulSoup(html_doc, 'lxml')
+    soup = bs.BeautifulSoup(source, 'lxml')
+    urls = []
+    for url in soup.find_all('a'):
+        # href = str(url.get('href'))
+        href = repr(url.get('href'))
+        # cant use this, Ayreon case doesnt apply
+        # How To: find discography, go sideways until <tbody>, now you got your table
+        # children tr -> th -> i -> if string, extract name, if <a>, extract title attribute
+        # if there is no tbody, look for <ul>, then go <li> -> <i> -> string or <a>
+        # if it was <a>, the date should be its sibling
+        match = re.search(".*album.*", href)
+        if match:
+            print(href)
+    # todo: ended on find_all() in BS documentation
 
-    # for url in soup.find_all('a'):
-    #     print(url.get('href'))
-
-    result = soup.find(class_='story')
-    print(result)
+    # result = soup.find(class_='story')
 
 except Exception as e:
     print(str(e))
