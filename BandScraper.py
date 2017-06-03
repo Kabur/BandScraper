@@ -1,5 +1,6 @@
 import sys
 import bs4 as bs
+import requests
 import urllib.parse
 import urllib.request
 import re
@@ -22,17 +23,16 @@ and they lived at the bottom of a well.
 </html>
 """
 
-# url = 'https://www.google.com/search?q=leprous+new+album'
-url = 'https://en.wikipedia.org/wiki/Leprous'
-# url = 'https://en.wikipedia.org/wiki/Ayreon'
-# url = 'https://en.wikipedia.org/wiki/The_Algorithm'
-# ayreon, leprous, the algorithm
-headers = {
-    'User-Agent': "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"}
-
 ''' Learning stuff '''
 if False:
     source = html_doc
+    # url = 'https://www.google.com/search?q=leprous+new+album'
+    url = 'https://en.wikipedia.org/wiki/Leprous'
+    # url = 'https://en.wikipedia.org/wiki/Ayreon'
+    # url = 'https://en.wikipedia.org/wiki/The_Algorithm'
+    # ayreon, leprous, the algorithm
+    headers = {
+        'User-Agent': "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"}
     try:
         source = html_doc
         soup = bs.BeautifulSoup(source, 'lxml')
@@ -57,71 +57,75 @@ if False:
     exit()
 
 ''' Actually trying to scrape'''
-# try:
-req = urllib.request.Request(url, headers=headers)
-source = urllib.request.urlopen(req)
-soup = bs.BeautifulSoup(source, 'lxml')
-# urls = []
+# url = 'https://en.wikipedia.org/wiki/Leprous'
+# ayreon, leprous, the algorithm
+# headers = {
+#     'User-Agent': "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"}
+# req = urllib.request.Request(url, headers=headers)
+# source = urllib.request.urlopen(req)
+# soup = bs.BeautifulSoup(source, 'lxml')
+with open("bands.txt", 'r') as file:
+    bands = file.readlines()
+    print(bands)
 
-''' find discography element '''
-discography = soup.find(id='Discography')
-disco_parent = discography.find_parent()
-sibling = disco_parent.find_next_sibling()
-''' Go sideways to find the table with albums '''
-while sibling is not None and sibling.name != "table" and sibling.name != "div":
-    sibling = sibling.find_next_sibling()
+albums = []
+for band in bands:
+    query = band + "band"
+    query = query.replace(" ", "+")
+    response = requests.get("https://www.google.com/search?q=site:en.wikipedia.org+" + query)
+    soup = bs.BeautifulSoup(response.text, "lxml")
 
-''' Table is present '''
-if sibling.name == "table":
-    table_rows = sibling.contents
-    if table_rows[-2].find("th") is None:
-        album = table_rows[-4].find("th")
-    else:
-        album = table_rows[-2].find("th")
+    link = soup.find('h3', attrs={'class': 'r'}) # Guides BS to h3 class "r" where green Wikipedia URLs are located, then prints URLs
+    link = link.find("a").get("href")
+    link = link[7:].split("&")[0] # [7:] strips the /url?q= prefix, split removes garbage in link after &
+    source = requests.get(link)
+    soup = bs.BeautifulSoup(source.content, 'lxml')
 
-    ''' if there is <a>, extract the album from there '''
-    if album.find("a") is not None:
-        album = album.find("a")
-        print(album.get("title"))  # FINAL
-        print(album.get_text())  # FINAL
-    elif album.find("i") is not None:
-        ''' if there is no <a>, extract the album from <i> '''
-        print(album.find("i").get_text())  # FINAL
-    else:
-        print("DIDNT FIND AN ALBUM, INSPECT WIKI")
-
-    ''' No table, just <ul> and <li> tags'''
-else:
+    ''' find discography element '''
+    discography = soup.find(id='Discography')
+    disco_parent = discography.find_parent()
     sibling = disco_parent.find_next_sibling()
-    print(sibling)
-    ''' Go sideways to find uls '''
-    while sibling is not None and sibling.name != "ul":
+    ''' Go sideways to find the table with albums '''
+    while sibling is not None and sibling.name != "table" and sibling.name != "div":
         sibling = sibling.find_next_sibling()
-    if sibling is None:
-        print("DIDNT FIND AN ALBUM, INSPECT WIKI")
+
+    ''' Table is present '''
+    if sibling.name == "table":
+        table_rows = sibling.contents
+        if table_rows[-2].find("th") is None:
+            album = table_rows[-4].find("th")
+        else:
+            album = table_rows[-2].find("th")
+
+        ''' if there is <a>, extract the album from there '''
+        if album.find("a") is not None:
+            album = album.find("a")
+            if album.get_text() is not None:
+                albums.append(album.get_text())  # FINAL
+            else:
+                albums.append(album.get("title"))  # FINAL
+        elif album.find("i") is not None:
+            ''' if there is no <a>, extract the album from <i> '''
+            albums.append(album.find("i").get_text())  # FINAL
+        else:
+            print("DIDNT FIND AN ALBUM, INSPECT WIKI")
+
+        ''' No table, just <ul> and <li> tags'''
     else:
-        lis = sibling.contents
-        print(lis[-2].get_text()) # FINAL
+        sibling = disco_parent.find_next_sibling()
+        print(sibling)
+        ''' Go sideways to find uls '''
+        while sibling is not None and sibling.name != "ul":
+            sibling = sibling.find_next_sibling()
+        if sibling is None:
+            print("DIDNT FIND AN ALBUM, INSPECT WIKI")
+        else:
+            lis = sibling.contents
+            albums.append(lis[-2].get_text())  # FINAL
 
 
-        # if there is no tbody, look for <ul>, then go <li> -> <i> -> string or <a>
-        # if it was <a>, the date should be its sibling
+print("******* FINAL *********")
+print(albums)
 
-"""
-for url in soup.find_all('a'):
-    # href = str(url.get('href'))
-    href = repr(url.get('href'))
-    # cant use this, Ayreon case doesnt apply
-    # How To: find discography, go sideways until <tbody>, now you got your table
-    # children tr -> th -> i -> if string, extract name, if <a>, extract title attribute
-    # if there is no tbody, look for <ul>, then go <li> -> <i> -> string or <a>
-    # if it was <a>, the date should be its sibling
-    match = re.search(".*album.*", href)
-    if match:
-        print(href)
-# todo: ended on find_all() in BS documentation
-
-# result = soup.find(class_='story')
-"""
-# except Exception as e:
-#     print(str(e))
+# todo: DICTIONARY OF Band_name, Album1, Album2, Year1, Year2
+# todo: pekne zrozumitelne vypsiat
