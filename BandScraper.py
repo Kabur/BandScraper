@@ -23,40 +23,10 @@ and they lived at the bottom of a well.
 </html>
 """
 
-''' Learning stuff '''
-if False:
-    source = html_doc
-    # url = 'https://www.google.com/search?q=leprous+new+album'
-    url = 'https://en.wikipedia.org/wiki/Leprous'
-    # url = 'https://en.wikipedia.org/wiki/Ayreon'
-    # url = 'https://en.wikipedia.org/wiki/The_Algorithm'
-    # ayreon, leprous, the algorithm
-    headers = {
-        'User-Agent': "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.27 Safari/537.17"}
-    try:
-        source = html_doc
-        soup = bs.BeautifulSoup(source, 'lxml')
-        # print(soup.find_all('a', id='link2'))
-        # print(soup.find_all(href=re.compile("example"), limit=1))
-        # print(soup.find_all(string=re.compile("sisters")))
+# print(soup.find_all('a', id='link2'))
+# print(soup.find_all(href=re.compile("example"), limit=1))
+# print(soup.find_all(string=re.compile("sisters")))
 
-        # element = soup.find(string="Lacie")
-        # print(element)
-        # print("*******")
-        # parent1 = element.find_parent()
-        # print(parent1)
-        # print("*******")
-        # print(parent1.name)
-
-        body = soup.find("body")
-        a = body.find("a")
-        print(a)
-
-    except Exception as e:
-        print(str(e))
-    exit()
-
-''' Actually trying to scrape'''
 # url = 'https://en.wikipedia.org/wiki/Leprous'
 # ayreon, leprous, the algorithm
 # headers = {
@@ -64,15 +34,18 @@ if False:
 # req = urllib.request.Request(url, headers=headers)
 # source = urllib.request.urlopen(req)
 # soup = bs.BeautifulSoup(source, 'lxml')
+
+
 with open("bands.txt", 'r') as file:
     bands = file.readlines()
-    print(bands)
 
-albums = []
+# albums = []
+dictionaries = []
 for band in bands:
-    query = band + "band"
+    band_dict = {'band': band[:-1]}
+    query = "site:en.wikipedia.org+" + band + "band"
     query = query.replace(" ", "+")
-    response = requests.get("https://www.google.com/search?q=site:en.wikipedia.org+" + query)
+    response = requests.get("https://www.google.com/search?q=" + query)
     soup = bs.BeautifulSoup(response.text, "lxml")
 
     link = soup.find('h3', attrs={'class': 'r'}) # Guides BS to h3 class "r" where green Wikipedia URLs are located, then prints URLs
@@ -89,43 +62,70 @@ for band in bands:
     while sibling is not None and sibling.name != "table" and sibling.name != "div":
         sibling = sibling.find_next_sibling()
 
-    ''' Table is present '''
+    ''' 
+    Type 1:
+    Table is present 
+    '''
     if sibling.name == "table":
         table_rows = sibling.contents
+        # in case there is a junk table row -> cut it
         if table_rows[-2].find("th") is None:
-            album = table_rows[-4].find("th")
-        else:
-            album = table_rows[-2].find("th")
+            table_rows = table_rows[:-2]
 
-        ''' if there is <a>, extract the album from there '''
-        if album.find("a") is not None:
-            album = album.find("a")
-            if album.get_text() is not None:
-                albums.append(album.get_text())  # FINAL
-            else:
-                albums.append(album.get("title"))  # FINAL
-        elif album.find("i") is not None:
-            ''' if there is no <a>, extract the album from <i> '''
-            albums.append(album.find("i").get_text())  # FINAL
+        th = table_rows[-2].find('th')
+        # ''' if there is <a>, extract the album from there '''
+        if th.find('i').find("a") is not None:
+            band_dict['album1'] = th.find('i').find("a").get('title')
+            # ''' if there is no <a>, extract the album from <i> '''
         else:
-            print("DIDNT FIND AN ALBUM, INSPECT WIKI")
+            band_dict['album1'] = th.find('i').get_text()
+        td = th.find_next_sibling()
+        band_dict['year1'] = re.findall('\d{4}', td.get_text())[0]
 
-        ''' No table, just <ul> and <li> tags'''
+        # ''' same shit for the second album, should put it to a function prolly xD '''
+        th = table_rows[-4].find('th')
+        # ''' if there is <a>, extract the album from there '''
+        if th.find('i').find("a") is not None:
+            band_dict['album2'] = th.find('i').find("a").get('title')
+            # ''' if there is no <a>, extract the album from <i> '''
+        else:
+            band_dict['album2'] = th.find('i').get_text()
+        td = th.find_next_sibling()
+        band_dict['year2'] = re.findall('\d{4}', td.get_text())[0]
+
+        ''' 
+        TYPE 2:
+        No table, just <ul> and <li> tags
+        '''
     else:
         sibling = disco_parent.find_next_sibling()
-        print(sibling)
-        ''' Go sideways to find uls '''
+        # ''' Go sideways to find uls '''
         while sibling is not None and sibling.name != "ul":
             sibling = sibling.find_next_sibling()
         if sibling is None:
             print("DIDNT FIND AN ALBUM, INSPECT WIKI")
         else:
             lis = sibling.contents
-            albums.append(lis[-2].get_text())  # FINAL
+            if lis[-2].find('a') is not None:  # if its in <a>...
+                band_dict['year1'] = lis[-2].contents[1]
+                band_dict['album1'] = lis[-2].find('a').get('title')
+            else:  # its in <i>
+                band_dict['year1'] = lis[-2].contents[1]
+                band_dict['album1'] = lis[-2].contents[0].get_text()
+            if lis[-4].find('a') is not None:
+                band_dict['year2'] = lis[-4].contents[1]
+                band_dict['album2'] = lis[-4].find('a').get('title')
+            else:
+                band_dict['year2'] = lis[-4].contents[1]
+                band_dict['album2'] = lis[-4].contents[0].get_text()
 
+    dictionaries.append(band_dict)
 
-print("******* FINAL *********")
-print(albums)
+for item in dictionaries:
+    print(item['band'] + ": ")
+    print("    " + item['album1'] + ", " + item['year1'])
+    print("    " + item['album2'] + ", " + item['year2'])
 
-# todo: DICTIONARY OF Band_name, Album1, Album2, Year1, Year2
-# todo: pekne zrozumitelne vypsiat
+# todo: only extract after Studio albums or Albums header, not right after discography
+# todo: osetrit, ak kapela ma iba 1 album (nemozem ist na [-4])
+# todo: test on all bands
