@@ -1,3 +1,4 @@
+from time import sleep
 import sys
 import bs4 as bs
 import requests
@@ -36,25 +37,29 @@ and they lived at the bottom of a well.
 # soup = bs.BeautifulSoup(source, 'lxml')
 
 
-with open("bands.txt", 'r') as file:
+with open("all_bands.txt", 'r') as file:
     bands = file.readlines()
 
 # albums = []
 dictionaries = []
 for band in bands:
+    # sleep(3)
     band_dict = {'band': band[:-1]}
-    query = "site:en.wikipedia.org+" + band + "band"
-    query = query.replace(" ", "+")
-    response = requests.get("https://www.google.com/search?q=" + query)
-    soup = bs.BeautifulSoup(response.text, "lxml")
-
-    link = soup.find('h3', attrs={'class': 'r'}) # Guides BS to h3 class "r" where green Wikipedia URLs are located, then prints URLs
-    # print(soup.prettify())
-
-    link = link.find("a").get("href")
-    link = link[7:].split("&")[0] # [7:] strips the /url?q= prefix, split removes garbage in link after &
-    source = requests.get(link)
-    soup = bs.BeautifulSoup(source.content, 'lxml')
+    # query = "site:en.wikipedia.org+" + band + "band"
+    # query = query.replace(" ", "+")
+    # response = requests.get("https://www.google.com/search?q=" + query)
+    # soup = bs.BeautifulSoup(response.text, "lxml")
+    #
+    # link = soup.find('h3', attrs={'class': 'r'}) # Guides BS to h3 class "r" where green Wikipedia URLs are located, then prints URLs
+    #
+    # link = link.find("a").get("href")
+    # link = link[7:].split("&")[0] # [7:] strips the /url?q= prefix, split removes garbage in link after &
+    link = 'https://en.wikipedia.org/wiki/Babymetal'
+    # link = 'https://en.wikipedia.org/wiki/Haken_(band)'
+    # link = 'https://en.wikipedia.org/wiki/Ayreon'
+    # link = 'https://en.wikipedia.org/wiki/Opeth'
+    response = requests.get(link)
+    soup = bs.BeautifulSoup(response.content, 'lxml')
 
     # ''' find discography element '''
     discography = soup.find(id='Discography')
@@ -64,19 +69,50 @@ for band in bands:
     # while sibling is not None and sibling.name != "table":
     #     sibling = sibling.find_next_sibling()
 
-    sibling = disco_parent.find_next_sibling()
-    while re.match('.*[aA]lbums.*', sibling.find('span').get_text()) is None:
+    sibling = disco_parent
+    sibling = sibling.find_next_sibling()
+    text = ""
+
+    while sibling is not None:
+        # its a subheader like "Live Albums" - skip two times or skip once and break
+        if sibling.name == "h3":
+            text = sibling.find('span').get_text()
+            if ("albums" not in text and "Albums" not in text) or "Live" in text:
+                sibling = sibling.find_next_sibling()
+                continue
+            else:
+                sibling = sibling.find_next_sibling()
+                break
+        # There was no more junk or subheaders
+        elif sibling.name == 'ul':
+            break
         sibling = sibling.find_next_sibling()
+    else:
+        print("REACHED END OF FILE, NO ALBUMS FOUND LUL")
+
+    album_table = sibling
+
+    # while ("albums" not in text and "Albums" not in text) or "Live" in text:
+    #     sibling = sibling.find_next_sibling()
+    #     if sibling.find('span') is not None:
+    #         text = sibling.find('span').get_text()
+    #     else:
+    #         text = ""
 
     ''' 
     Type 1:
     Table is present 
     '''
-    if sibling.name == "table":
-        table_rows = sibling.contents
+    if album_table.name == "table":
+        table_rows = album_table.contents
         # in case there is a junk table row -> cut it
         if table_rows[-2].find("th") is None:
             table_rows = table_rows[:-2]
+
+        # i_tag = table_rows[-2].find('i')
+        # if i_tag is None:
+        #     table_rows = table_rows[:-2]
+        #     i_tag = table_rows[-2].find('i')
 
         th = table_rows[-2].find('th')
         # if its in <a>
@@ -109,14 +145,15 @@ for band in bands:
         No table, just <ul> and <li> tags
         '''
     else:
-        sibling = disco_parent.find_next_sibling()
+        # sibling = disco_parent.find_next_sibling()
+
         # ''' Go sideways to find uls '''
-        while sibling is not None and sibling.name != "ul":
-            sibling = sibling.find_next_sibling()
-        if sibling is None:
+        while album_table is not None and album_table.name != "ul":
+            album_table = album_table.find_next_sibling()
+        if album_table is None:
             print("DIDNT FIND AN ALBUM, INSPECT WIKI")
         else:
-            lis = sibling.contents
+            lis = album_table.contents
 
             # sometimes there is a junk tag instead of the year -> cut
             if re.match('.*\d{4}.*', str(lis[-2].contents[1])) is None:
@@ -150,10 +187,4 @@ for band in bands:
     print("    " + band_dict['album1'] + ", " + band_dict['year1'])
     print("    " + band_dict['album2'] + ", " + band_dict['year2'])
 
-# for item in dictionaries:
-#     print(item['band'] + ": ")
-#     print("    " + item['album1'] + ", " + item['year1'])
-#     print("    " + item['album2'] + ", " + item['year2'])
-
-# todo: (DONE - needs testing) only extract after Studio albums or Albums header, not right after discography
 # todo: test on all bands
