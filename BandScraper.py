@@ -86,15 +86,11 @@ for i, band in enumerate(bands):
 # albums = []
 dictionaries = []
 for i, band in enumerate(bands):
-    if band != 'periphery':
+    print(str(i) + "*"*50)
+    if band != 'sleepytime gorilla museum':
         continue
-    # fix_list = [26, 38, 40, 45, 48, 50, 51, 53, 59, 61, 62, 66, 67, 68, 70, 71, 72, 74, 77, 79, 82, 83, 84, 88, 89]
-    # skip = True
-    # for item in fix_list:
-    #     if i == item:
-    #         skip = False
-    #         break
-    # if skip:
+    # fix_list = [26, 38, 45, 48, 50, 51, 53, 61, 62, 66, 67, 68, 70, 71, 72, 74, 77, 79, 83, 84, 88, 89]
+    # if i not in fix_list:
     #     continue
     try:
 
@@ -116,46 +112,70 @@ for i, band in enumerate(bands):
         Table is present 
         '''
         if album_table.name == "table":
-            table_rows = album_table.contents
-            # table_rows = album_table.find_all('tr')
-            #
-            # row1 = table_rows[0].contents[1].get_text().lower()
+            # table_rows = album_table.contents
+            table_rows = album_table.find_all('tr')
 
             # in case there is a junk table row -> cut it
-            i_tag = table_rows[-2].find('i')
-            if i_tag is None:
-                table_rows = table_rows[:-2]
-                i_tag = table_rows[-2].find('i')
+            if table_rows[-1].find('i') is None:
+                del table_rows[-1]
+                # i_tag = table_rows[-1].find('i')
 
-            # th = table_rows[-2].find('th')
-            column1 = i_tag.parent  # todo: this is kinda lame.
-            # test = album_table.find_all('tr')
-            # print(test)
-            # exit()
-            # if its in <a>
-            if i_tag.find("a") is not None:
-                band_dict['album1'] = i_tag.find("a").get('title')
-                # if its just in <i>
-            else:
-                band_dict['album1'] = i_tag.get_text()
-            # td = th.find_next_sibling()
-            column2 = column1.find_next_sibling()
-            band_dict['year1'] = re.findall('\d{4}', column2.get_text())[0]
+            # Type 1.1: column1 is years
+            row1 = table_rows[0].contents[1].get_text().lower()
+            if 'year' in row1:
+                year = table_rows[-1].contents[1].get_text()
+                band_dict['year1'] = year
 
-            # ''' same shit for the second album, should put it to a function prolly xD '''
-            try:
-                i_tag = table_rows[-4].find('i')
-                column1 = i_tag.parent
-                # th = table_rows[-4].find('th')
-                # if its in <a>
-                if i_tag.find("a") is not None:
-                    band_dict['album2'] = i_tag.find("a").get('title')
-                    # if its just in <i>
+                # NOT doing next_cell here so far -> only if a band doesnt work
+
+                # 1.1.1.: table cell contains <a>
+                if table_rows[-1].contents[3].find('a') is not None:
+                    band_dict['album1'] = table_rows[-1].contents[3].find('a').get('title')
+                # 1.1.2.: table cell only contains <i>
                 else:
-                    band_dict['album2'] = i_tag.get_text()
+                    band_dict['album1'] = table_rows[-1].contents[3].get_text()
 
-                column2 = column1.find_next_sibling()
-                band_dict['year2'] = re.findall('\d{4}', column2.get_text())[0]
+            # Type 1.2.: column1 was not years (hopefuly can only be the title then)
+            else:
+                # 1.2.1.: table cell contains <a>
+                if table_rows[-1].contents[1].find('a') is not None:
+                    band_dict['album1'] = table_rows[-1].contents[1].find('a').get('title')
+                # 1.2.2.: table cell only contains <i>
+                else:
+                    band_dict['album1'] = table_rows[-1].contents[1].get_text()
+
+                # column2 = column1.find_next_sibling()
+                band_dict['year1'] = re.findall('\d{4}', table_rows[-1].contents[3].get_text())[0]
+            # ************
+            # SECOND ALBUM
+            # ************
+            # Type 1.1: column1 is years
+            try:
+                if 'year' in row1:
+                    year = table_rows[-2].contents[1].get_text()
+                    band_dict['year2'] = year
+
+                    # next_cell examples: periphery vs. haggard
+                    next_cell = table_rows[-2].contents[3].find('i')
+                    if next_cell is None:
+                        next_cell = table_rows[-2].contents[1]
+                    # 1.1.1.: table cell contains <a>
+                    if next_cell.find('a') is not None:
+                        band_dict['album2'] = next_cell.find('a').get('title')
+                    # 1.1.2.: table cell only contains <i>
+                    else:
+                        band_dict['album2'] = next_cell.get_text()
+                # Type 1.2.: column1 was not years (hopefuly can only be the title then)
+                else:
+                    # 1.2.1.: table cell contains <a>
+                    if table_rows[-2].contents[1].find('a') is not None:
+                        band_dict['album2'] = table_rows[-2].contents[1].find('a').get('title')
+                    # 1.2.2.: table cell only contains <i>
+                    else:
+                        band_dict['album2'] = table_rows[-2].contents[1].get_text()
+
+                    band_dict['year2'] = re.findall('\d{4}', table_rows[-2].contents[3].get_text())[0]
+
             except IndexError as e:
                 band_dict['year2'] = 'NONE'
                 band_dict['album2'] = 'NONE'
@@ -166,8 +186,6 @@ for i, band in enumerate(bands):
             No table, just <ul> and <li> tags
             '''
         else:
-            # sibling = disco_parent.find_next_sibling()
-
             # ''' Go sideways to find uls '''
             while album_table is not None and album_table.name != "ul":
                 album_table = album_table.find_next_sibling()
@@ -180,7 +198,6 @@ for i, band in enumerate(bands):
                 if len(lis[-2].contents) > 1:
                     if re.match('.*\d{4}.*', str(lis[-2].contents[1])) is None:
                         del lis[-2].contents[1]
-                        print("deleting junk line...")
 
                 # if its in <a>...
                 if lis[-2].find('i').find('a') is not None:
@@ -219,18 +236,21 @@ for i, band in enumerate(bands):
                     band_dict['album2'] = 'NONE'
                     print(str(e) + " inserting NONE")
 
-        if band_dict['year1'] is not 'NONE':
-            band_dict['year1'] = re.findall('\d{4}', band_dict['year1'])[0]
-        if band_dict['year2'] is not 'NONE':
-            band_dict['year2'] = re.findall('\d{4}', band_dict['year2'])[0]
+        # if band_dict['year1'] is not 'NONE':
+        #     band_dict['year1'] = re.findall('\d{4}', band_dict['year1'])[0]
+        # if band_dict['year2'] is not 'NONE':
+        #     band_dict['year2'] = re.findall('\d{4}', band_dict['year2'])[0]
 
         dictionaries.append(band_dict)
         print(str(i) + '. ' + band_dict['band'] + ": ")
         print("    " + band_dict['album1'] + ", " + band_dict['year1'])
         print("    " + band_dict['album2'] + ", " + band_dict['year2'])
+
     except Exception as e:
-        print(band + ' went to shit, LUL')
-        print(str(e))
+        allowed_exceptions = ['fortiori', 'igorrr', 'pryapisme', 'roadrunner united', 'corpo-mente', 'darth vegas', 'hentai corporation', 'shaolin death squad', 'dead brothers', 'duct tape mustache', 'eminem']
+        if band.lower() not in allowed_exceptions:
+            print(band + ' went to shit, LUL')
+            print('!!! Exception: ' + str(e))
     sleep(random.randrange(3, 5))
 
 # todo: example: devin townsend - extract solo albums as well as devin townsend project albums
