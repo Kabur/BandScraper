@@ -24,6 +24,8 @@ and they lived at the bottom of a well.
 </body>
 </html>
 """
+
+
 # test_soup = bs.BeautifulSoup(html_doc, 'lxml')
 # print(test_soup.find('body').contents)
 # exit()
@@ -42,7 +44,7 @@ and they lived at the bottom of a well.
 def find_album_table(sibling):
     while sibling is not None:
         # its a subheader like "Live Albums" - skip two times or skip once and break
-        if sibling.name == "h3":
+        if sibling.name == "h3" or sibling.name == 'h4':
             text = sibling.find('span').get_text().lower()
             if ("albums" not in text and band not in text) or "live" in text:
                 sibling = sibling.find_next_sibling()
@@ -53,7 +55,7 @@ def find_album_table(sibling):
         # There was no more junk or subheaders
         elif sibling.name == 'ul':
             return sibling
-        elif sibling.name == 'div':
+        elif sibling.name == 'div' or sibling.name == 'table' or sibling.name == 'td' or sibling.name == 'tr':
             inside_div = find_album_table(sibling.contents[0])
             if inside_div is not None:
                 return inside_div
@@ -68,35 +70,40 @@ def find_wiki_link(string):
     response = requests.get("https://www.google.com/search?q=" + query)
     soup = bs.BeautifulSoup(response.text, "lxml")
 
-    link = soup.find('h3', attrs={'class': 'r'}) # Guides BS to h3 class "r" where green Wikipedia URLs are located, then prints URLs
+    link = soup.find('h3', attrs={
+        'class': 'r'})  # Guides BS to h3 class "r" where green Wikipedia URLs are located, then prints URLs
 
     link = link.find("a").get("href")
-    link = link[7:].split("&")[0] # [7:] strips the /url?q= prefix, split removes garbage in link after &
+    link = link[7:].split("&")[0]  # [7:] strips the /url?q= prefix, split removes garbage in link after &
 
     return link
 
-with open("all_bands_withlinks.txt", 'r') as file:
+
+with open("all_bands.txt", 'r') as file:
     bands = file.readlines()
     links = []
 
-for i, band in enumerate(bands):
-    links.append(band.split(',')[1][:-1])
-    bands[i] = band.split(',')[0].lower()
+# to use with a file including wiki links
+# for i, band in enumerate(bands):
+#     links.append(band.split(',')[1][:-1])
+#     bands[i] = band.split(',')[0].lower()
 
 # albums = []
 dictionaries = []
+# bands = bands[65:]
 for i, band in enumerate(bands):
-    print(str(i) + "*"*50)
-    if band != 'sleepytime gorilla museum':
-        continue
-    # fix_list = [26, 38, 45, 48, 50, 51, 53, 61, 62, 66, 67, 68, 70, 71, 72, 74, 77, 79, 83, 84, 88, 89]
-    # if i not in fix_list:
+    band = band[0:-1]
+    print(str(i) + "*" * 50)
+    # if band != 'viza':
     #     continue
+    fix_list = [38, 50, 53, 66, 71, 72, 74, 88, 89]
+    if i in fix_list:
+        print(str(i) + '. ' + band + ' has a known bug, cba to fix, html is messy, sorry :D')
+        continue
     try:
-
         band_dict = {'band': band}
-        # link = find_wiki_link(band + ' band')
-        link = links[i]
+        link = find_wiki_link(band + ' band')
+        # link = links[i]
         response = requests.get(link)
         soup = bs.BeautifulSoup(response.content, 'lxml')
 
@@ -106,6 +113,8 @@ for i, band in enumerate(bands):
 
         # ''' Go sideways to find the table with albums '''
         album_table = find_album_table(disco_parent.find_next_sibling())
+        if disco_parent.find_next_sibling().name == 'table':
+            album_table = disco_parent.find_next_sibling()
 
         ''' 
         Type 1:
@@ -179,7 +188,6 @@ for i, band in enumerate(bands):
             except IndexError as e:
                 band_dict['year2'] = 'NONE'
                 band_dict['album2'] = 'NONE'
-                print(str(e))
 
             ''' 
             TYPE 2:
@@ -196,13 +204,26 @@ for i, band in enumerate(bands):
 
                 # sometimes there is a junk tag instead of the year -> cut
                 if len(lis[-2].contents) > 1:
-                    if re.match('.*\d{4}.*', str(lis[-2].contents[1])) is None:
-                        del lis[-2].contents[1]
+                    if re.match('.*\d{4}.*', str(lis[-2].contents[1])) is None and re.match('.*\d{4}.*', str(
+                            lis[-2].contents[0])) is None:
+                        lis = lis[:-2]
+                # if len(lis[-2].contents) > 1:
+                #     if re.match('.*\d{4}.*', str(lis[-2].contents[1])) is None:
+                #         del lis[-2].contents[1]
 
+                # if it has no <i> ---> everything is in <li>
+                if lis[-2].find('i') is None:
+                    band_dict['album1'] = lis[-2].get_text()
+                    band_dict['year1'] = re.findall('\d{4}', lis[-2].get_text())[0]
                 # if its in <a>...
-                if lis[-2].find('i').find('a') is not None:
+                elif lis[-2].find('i').find('a') is not None:
                     if len(lis[-2].contents) > 1:
-                        band_dict['year1'] = lis[-2].contents[1]
+                        # band_dict['year1'] = lis[-2].contents[0]  # used to be contents[0]
+                        if re.match('.*\d{4}.*', str(lis[-2].contents[1])) is None:
+                            band_dict['year1'] = lis[-2].contents[0]
+                        else:
+                            band_dict['year1'] = lis[-2].contents[1]
+
                     else:
                         band_dict['year1'] = 'NONE'
 
@@ -217,9 +238,17 @@ for i, band in enumerate(bands):
                     band_dict['album1'] = lis[-2].contents[0].get_text()
                 # REPEAT FOR SECOND ALBUM
                 try:
-                    if lis[-4].find('a') is not None:
+                    if lis[-4].find('i') is None:
+                        band_dict['album2'] = lis[-4].get_text()
+                        band_dict['year2'] = re.findall('\d{4}', lis[-4].get_text())[0]
+
+                    elif lis[-4].find('a') is not None:
                         if len(lis[-4].contents) > 1:
-                            band_dict['year2'] = lis[-4].contents[1]
+                            # band_dict['year2'] = lis[-4].contents[0]  # used to be contents[0]
+                            if re.match('.*\d{4}.*', str(lis[-4].contents[1])) is None:
+                                band_dict['year2'] = lis[-4].contents[0]
+                            else:
+                                band_dict['year2'] = lis[-4].contents[1]
                         else:
                             band_dict['year2'] = 'NONE'
 
@@ -234,7 +263,6 @@ for i, band in enumerate(bands):
                 except IndexError as e:
                     band_dict['year2'] = 'NONE'
                     band_dict['album2'] = 'NONE'
-                    print(str(e) + " inserting NONE")
 
         # if band_dict['year1'] is not 'NONE':
         #     band_dict['year1'] = re.findall('\d{4}', band_dict['year1'])[0]
@@ -247,13 +275,19 @@ for i, band in enumerate(bands):
         print("    " + band_dict['album2'] + ", " + band_dict['year2'])
 
     except Exception as e:
-        allowed_exceptions = ['fortiori', 'igorrr', 'pryapisme', 'roadrunner united', 'corpo-mente', 'darth vegas', 'hentai corporation', 'shaolin death squad', 'dead brothers', 'duct tape mustache', 'eminem']
+        allowed_exceptions = ['fortiori', 'igorrr', 'pryapisme', 'roadrunner united', 'corpo-mente', 'darth vegas',
+                              'hentai corporation', 'shaolin death squad', 'dead brothers', 'duct tape mustache',
+                              'eminem']
         if band.lower() not in allowed_exceptions:
-            print(band + ' went to shit, LUL')
+            print(str(i) + '. ' + band + ': scraping FAILED - didn\'t find the wikipedia page or the html of the page is messed up')
+            print("... or you put in too many bands and google found out you\'re a robot")
             print('!!! Exception: ' + str(e))
-    sleep(random.randrange(3, 5))
+        else:
+            print(str(i) + '. ' + band + ': didn\'t find a wikipedia page for this band')
+    sleep(random.randrange(7, 10))
 
 # todo: example: devin townsend - extract solo albums as well as devin townsend project albums
+# todo: indices of the bands to fix are in the fix_list... some of them have truly messed up html's lol
 ''' No Wiki:
 ForTiorI
 igorrr
